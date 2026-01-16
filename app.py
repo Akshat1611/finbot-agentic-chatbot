@@ -1,13 +1,13 @@
 import streamlit as st
-import pandas as pd
+import matplotlib.pyplot as plt
 
-from finbot import (
+from finbot_logic import (
     load_expense_data,
     finbot_advanced
 )
 
 # -------------------------------------------------
-# Streamlit Page Config
+# Page Configuration
 # -------------------------------------------------
 st.set_page_config(
     page_title="FinBot – Agentic Finance Assistant",
@@ -16,8 +16,8 @@ st.set_page_config(
 
 st.title("💰 FinBot – Agentic Finance Assistant")
 st.write(
-    "Upload your expense file, enter your budget, and get actionable "
-    "financial insights with optional goal-based planning."
+    "Upload your expense file, enter your monthly budget, and receive "
+    "actionable financial insights with goal-based planning."
 )
 
 # -------------------------------------------------
@@ -36,7 +36,7 @@ budget = st.sidebar.number_input(
     step=500
 )
 
-# Goal Mode Inputs
+# Goal Mode
 st.sidebar.subheader("🎯 Goal Mode (Optional)")
 
 goal_name = st.sidebar.selectbox(
@@ -53,7 +53,7 @@ if goal_name != "None":
     )
 
 # -------------------------------------------------
-# Main Logic
+# Main Processing
 # -------------------------------------------------
 if uploaded_file and budget > 0:
 
@@ -68,14 +68,60 @@ if uploaded_file and budget > 0:
         )
 
         # -------------------------------------------------
-        # Display Budget Summary
+        # Budget Summary
         # -------------------------------------------------
         st.subheader("📊 Budget Summary")
 
-        col1, col2, col3 = st.columns(3)
-        col1.metric("Budget (₹)", analysis["budget"])
-        col2.metric("Total Spent (₹)", analysis["total_spent"])
-        col3.metric("Remaining (₹)", analysis["remaining"])
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Monthly Budget (₹)", analysis["budget"])
+        c2.metric("Total Spent (₹)", analysis["total_spent"])
+        c3.metric("Remaining (₹)", analysis["remaining"])
+
+        # -------------------------------------------------
+        # Spending Distribution (Pie Chart)
+        # -------------------------------------------------
+        st.subheader("📊 Spending Distribution")
+
+        fig1, ax1 = plt.subplots()
+        ax1.pie(
+            analysis["category_breakdown"].values(),
+            labels=analysis["category_breakdown"].keys(),
+            autopct="%1.1f%%",
+            startangle=90
+        )
+        ax1.axis("equal")
+        st.pyplot(fig1)
+
+        # -------------------------------------------------
+        # Spending vs Recommended Limit (Bar Chart)
+        # -------------------------------------------------
+        st.subheader("📉 Spending vs Recommended Limits")
+
+        CATEGORY_LIMITS = {
+            "Food": 40,
+            "Rent": 35,
+            "Shopping": 15,
+            "Entertainment": 10,
+            "Travel": 10,
+            "Utilities": 10
+        }
+
+        categories = []
+        actual = []
+        limits = []
+
+        for category, amount in analysis["category_breakdown"].items():
+            limit_pct = CATEGORY_LIMITS.get(category, 20)
+            categories.append(category)
+            actual.append(amount)
+            limits.append((limit_pct / 100) * analysis["budget"])
+
+        fig2, ax2 = plt.subplots()
+        ax2.bar(categories, actual, label="Actual Spending")
+        ax2.bar(categories, limits, alpha=0.6, label="Recommended Limit")
+        ax2.set_ylabel("Amount (₹)")
+        ax2.legend()
+        st.pyplot(fig2)
 
         # -------------------------------------------------
         # Overspending Areas
@@ -111,13 +157,13 @@ if uploaded_file and budget > 0:
             st.success("No immediate action required.")
 
         # -------------------------------------------------
-        # Financial Goal (General)
+        # Monthly Financial Goal
         # -------------------------------------------------
         st.subheader("🎯 Monthly Financial Goal")
         st.info(summary["goal"])
 
         # -------------------------------------------------
-        # Goal Mode Output
+        # Goal Mode Output + Progress
         # -------------------------------------------------
         if goal_plan:
             st.subheader("🎯 Goal-Based Planning")
@@ -129,31 +175,43 @@ if uploaded_file and budget > 0:
                 f"**Monthly Saving Required:** ₹{goal_plan['monthly_saving_required']}"
             )
 
+            # Progress bar
+            st.subheader("📈 Goal Progress")
+
+            current_saving = max(analysis["remaining"], 0)
+            progress = min(current_saving / goal_plan["target_amount"], 1.0)
+
+            st.progress(progress)
+
+            st.write(
+                f"Saved this month: ₹{current_saving} / ₹{goal_plan['target_amount']} "
+                f"({int(progress * 100)}%)"
+            )
+
             if goal_plan["feasible"]:
-                st.success("✅ This goal is achievable with your current budget.")
+                st.success("✅ You are on track to achieve this goal.")
             else:
-                st.error("⚠️ This goal requires spending adjustments.")
+                st.error("⚠️ You need spending adjustments to achieve this goal.")
 
             for step in goal_plan["plan"]:
                 st.warning(step)
 
         # -------------------------------------------------
-        # AI / Rule-Based Explanation
+        # Explanation
         # -------------------------------------------------
         st.subheader("🧠 Explanation")
         st.write(explanation)
 
         # -------------------------------------------------
-        # Raw Data (Optional View)
+        # Raw Data
         # -------------------------------------------------
         with st.expander("📄 View Uploaded Expense Data"):
             st.dataframe(df)
 
     except Exception as e:
-        st.error(f"Error processing file: {e}")
+        st.error(f"Error processing data: {e}")
 
 else:
     st.info(
-        "👈 Please upload an expense file and enter your monthly budget "
-        "to begin analysis."
+        "👈 Upload an expense file and enter your monthly budget to begin."
     )
