@@ -1,5 +1,5 @@
 import streamlit as st
-from finbot_logic import load_expense_data, finbot_advanced
+from finbot import load_expense_data, finbot_advanced
 
 st.set_page_config(page_title="FinBot", layout="wide")
 st.title("💰 FinBot – AI Finance Assistant")
@@ -39,3 +39,4 @@ if uploaded_file and budget > 0:
 
     st.subheader("🧠 AI Explanation")
     st.write(explanation)
+
