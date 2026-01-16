@@ -84,7 +84,7 @@ if uploaded_file and budget > 0:
     # -------------------------------------------------
     st.subheader("📊 Spending Distribution (Avg Monthly)")
 
-    fig1, ax1 = plt.subplots(4,4)
+    fig1, ax1 = plt.subplots(figsize=(4,4))
     ax1.pie(
         analysis["category_breakdown"].values(),
         labels=analysis["category_breakdown"].keys(),
@@ -110,7 +110,7 @@ if uploaded_file and budget > 0:
         actual.append(amt)
         limits.append((LIMITS.get(cat, 20) / 100) * analysis["budget"])
 
-    fig2, ax2 = plt.subplots(5,3)
+    fig2, ax2 = plt.subplots(figsize=(5, 3))
     ax2.bar(cats, actual, label="Actual")
     ax2.bar(cats, limits, alpha=0.6, label="Recommended")
     ax2.set_ylabel("Amount (₹)")
@@ -124,7 +124,7 @@ if uploaded_file and budget > 0:
 
     monthly_spend = get_monthly_spending_trend(df)
 
-    fig3, ax3 = plt.subplots(5,3)
+    fig3, ax3 = plt.subplots(figsize=(5, 3))
     ax3.plot(
         monthly_spend["Month"],
         monthly_spend["Amount"],
@@ -188,4 +188,5 @@ if uploaded_file and budget > 0:
 
 else:
     st.info("👈 Upload an expense file and enter a budget to begin.")
+
 
