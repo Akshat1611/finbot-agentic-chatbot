@@ -1,6 +1,19 @@
 import pandas as pd
 
 # -------------------------------------------------
+# AI SETUP (LLaMA 3 via Ollama)
+# -------------------------------------------------
+USE_LLM = False
+llm = None
+
+try:
+    from langchain_ollama import ChatOllama
+    llm = ChatOllama(model="llama3", temperature=0.3)
+    USE_LLM = True
+except Exception:
+    USE_LLM = False
+
+# -------------------------------------------------
 # Configuration
 # -------------------------------------------------
 CATEGORY_LIMITS = {
@@ -28,7 +41,7 @@ def load_expense_data(file):
     elif file.name.endswith(".xlsx"):
         df = pd.read_excel(file)
     else:
-        raise ValueError("Only CSV and Excel files are supported")
+        raise ValueError("Only CSV and Excel supported")
 
     df["Amount"] = pd.to_numeric(df["Amount"], errors="coerce")
     df["Date"] = pd.to_datetime(df["Date"], dayfirst=True, errors="coerce")
@@ -39,15 +52,12 @@ def load_expense_data(file):
     return df
 
 # -------------------------------------------------
-# Monthly Helpers
+# Helpers
 # -------------------------------------------------
 def get_monthly_summary(df):
     monthly = df.groupby(["Month", "Category"])["Amount"].sum().reset_index()
     avg_monthly = monthly.groupby("Category")["Amount"].mean().to_dict()
-    months_detected = df["Month"].nunique()
-    months = sorted(df["Month"].unique())
-
-    return avg_monthly, months_detected, months
+    return avg_monthly, df["Month"].nunique(), sorted(df["Month"].unique())
 
 def get_monthly_spending_trend(df):
     return df.groupby("Month")["Amount"].sum().reset_index()
@@ -118,7 +128,55 @@ def goal_planning_agent(analysis, goal_name, goal_amount):
     }
 
 # -------------------------------------------------
-# MASTER FUNCTION (RETURNS 4 VALUES)
+# AI Explanation
+# -------------------------------------------------
+def ai_explain_finances(analysis, summary, goal_plan):
+    if not USE_LLM:
+        return None
+
+    prompt = f"""
+    You are a friendly AI personal finance assistant.
+
+    Budget: ₹{analysis['budget']}
+    Average Monthly Spend: ₹{analysis['avg_monthly_spent']}
+    Remaining: ₹{analysis['remaining']}
+
+    Overspending: {summary['avoid']}
+    Actions: {summary['actions']}
+    Goal: {goal_plan}
+
+    Explain the financial situation clearly and motivatingly.
+    """
+
+    try:
+        return llm.invoke(prompt).content
+    except Exception:
+        return None
+
+# -------------------------------------------------
+# AI Chat Response
+# -------------------------------------------------
+def ai_chat_response(user_input, analysis):
+    if not USE_LLM:
+        return "AI model is not active. Please start Ollama."
+
+    prompt = f"""
+    User financial context:
+    {analysis}
+
+    User question:
+    {user_input}
+
+    Answer clearly and concisely like a helpful finance chatbot.
+    """
+
+    try:
+        return llm.invoke(prompt).content
+    except Exception:
+        return "Sorry, I couldn't respond right now."
+
+# -------------------------------------------------
+# MASTER FUNCTION (RETURNS 5 VALUES)
 # -------------------------------------------------
 def finbot_advanced(df, budget, goal_name=None, goal_amount=None):
     analysis = analyze_budget(df, budget)
@@ -126,13 +184,12 @@ def finbot_advanced(df, budget, goal_name=None, goal_amount=None):
 
     goal_plan = None
     if goal_name and goal_amount:
-        goal_plan = goal_planning_agent(
-            analysis, goal_name, goal_amount
-        )
+        goal_plan = goal_planning_agent(analysis, goal_name, goal_amount)
 
     explanation = (
-        "Insights are generated based on average monthly spending "
-        "with goal-oriented financial planning."
+        "Insights are generated using agent-based financial analysis."
     )
 
-    return analysis, summary, goal_plan, explanation
+    ai_response = ai_explain_finances(analysis, summary, goal_plan)
+
+    return analysis, summary, goal_plan, explanation, ai_response
