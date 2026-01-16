@@ -103,7 +103,7 @@ if uploaded_file and budget > 0:
     st.pyplot(fig3)
 
     # -------------------------------------------------
-    # Goal Progress (FIXED & ALWAYS VISIBLE)
+    # Goal Progress
     # -------------------------------------------------
     if goal_plan:
         st.subheader("🎯 Goal Progress")
@@ -114,7 +114,6 @@ if uploaded_file and budget > 0:
         )
 
         st.progress(progress)
-
         st.write(
             f"Current monthly saving: ₹{goal_plan['current_saving']} / "
             f"₹{goal_plan['target_amount']} "
@@ -127,15 +126,24 @@ if uploaded_file and budget > 0:
             st.warning("⚠️ Reduce expenses to improve goal progress.")
 
     # -------------------------------------------------
-    # Recommendations
+    # Recommendations (UX FIXED)
     # -------------------------------------------------
     st.subheader("❌ Where NOT to Spend")
-    for item in summary["avoid"]:
-        st.error(item)
+    if summary["avoid"]:
+        for item in summary["avoid"]:
+            st.error(item)
+    else:
+        st.success("No critical overspending detected. Your finances are healthy.")
 
     st.subheader("📋 Action Plan")
-    for act in summary["actions"]:
-        st.warning(act)
+    if summary["actions"]:
+        for act in summary["actions"]:
+            st.warning(act)
+    else:
+        st.info("No immediate corrective actions needed. Keep monitoring monthly.")
+
+    st.subheader("🎯 Monthly Saving Guidance")
+    st.info(summary["goal"])
 
     st.subheader("🧠 Explanation")
     st.write(explanation)
