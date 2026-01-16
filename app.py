@@ -1,7 +1,7 @@
 import streamlit as st
 import matplotlib.pyplot as plt
 
-from finbot_logic import (
+from finbot import (
     load_expense_data,
     finbot_advanced
 )
@@ -215,3 +215,4 @@ else:
     st.info(
         "👈 Upload an expense file and enter your monthly budget to begin."
     )
+
