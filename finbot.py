@@ -193,3 +193,4 @@ def finbot_advanced(df, budget, goal_name=None, goal_amount=None):
     ai_response = ai_explain_finances(analysis, summary, goal_plan)
 
     return analysis, summary, goal_plan, explanation, ai_response
+
