@@ -1,14 +1,8 @@
-"""
-FinBot Logic Module
-------------------
-Cloud-safe, goal-aware agentic finance logic.
-"""
-
 import pandas as pd
 
-# =====================================================
-# Optional LLM (LLaMA 3 via Ollama) – Safe Import
-# =====================================================
+# -----------------------------------------
+# Optional LLM (Safe for Cloud)
+# -----------------------------------------
 USE_LLM = False
 llm = None
 
@@ -20,10 +14,9 @@ except Exception:
     USE_LLM = False
 
 
-# =====================================================
+# -----------------------------------------
 # Configuration
-# =====================================================
-
+# -----------------------------------------
 CATEGORY_LIMITS = {
     "Food": 40,
     "Rent": 35,
@@ -34,101 +27,107 @@ CATEGORY_LIMITS = {
 }
 
 GOALS = {
-    "Emergency Fund": {
-        "months": 6,
-        "description": "Financial safety net"
-    },
-    "Travel": {
-        "months": 6,
-        "description": "Trip or vacation"
-    },
-    "Gadget": {
-        "months": 4,
-        "description": "Laptop / phone purchase"
-    },
-    "Investment": {
-        "months": 12,
-        "description": "Long-term wealth building"
-    }
+    "Emergency Fund": 6,
+    "Travel": 6,
+    "Gadget": 4,
+    "Investment": 12
 }
 
 
-# =====================================================
-# Data Loading
-# =====================================================
+# -----------------------------------------
+# Load Expense Data (Indian Dates Supported)
+# -----------------------------------------
 def load_expense_data(file):
-    """
-    Load CSV or Excel expense file.
-    Required columns: Date, Category, Amount
-    """
     if file.name.endswith(".csv"):
         df = pd.read_csv(file)
     elif file.name.endswith(".xlsx"):
         df = pd.read_excel(file)
     else:
-        raise ValueError("Unsupported file type")
+        raise ValueError("Only CSV and Excel supported")
 
     df["Amount"] = pd.to_numeric(df["Amount"], errors="coerce")
-    df.dropna(subset=["Category", "Amount"], inplace=True)
+
+    # Indian + month-name date parsing
+    df["Date"] = pd.to_datetime(
+        df["Date"],
+        dayfirst=True,
+        errors="coerce"
+    )
+
+    df.dropna(subset=["Date", "Category", "Amount"], inplace=True)
+
+    # Month in readable format (Jan 2026)
+    df["Month"] = df["Date"].dt.strftime("%b %Y")
 
     return df
 
 
-# =====================================================
-# Budget Analysis Tool
-# =====================================================
-def analyze_budget(df, budget):
-    total_spent = df["Amount"].sum()
-    remaining = budget - total_spent
-
-    breakdown = (
-        df.groupby("Category")["Amount"]
+# -----------------------------------------
+# Monthly Summary (Multi-month Support)
+# -----------------------------------------
+def get_monthly_summary(df):
+    monthly = (
+        df.groupby(["Month", "Category"])["Amount"]
         .sum()
-        .sort_values(ascending=False)
+        .reset_index()
+    )
+
+    avg_monthly = (
+        monthly.groupby("Category")["Amount"]
+        .mean()
         .to_dict()
     )
 
+    months_detected = df["Month"].nunique()
+    month_list = sorted(df["Month"].unique())
+
+    return avg_monthly, months_detected, month_list
+
+
+# -----------------------------------------
+# Budget Analysis
+# -----------------------------------------
+def analyze_budget(df, budget):
+    avg_breakdown, months_count, months = get_monthly_summary(df)
+
+    avg_monthly_spent = sum(avg_breakdown.values())
+    remaining = budget - avg_monthly_spent
+
     return {
         "budget": round(budget, 2),
-        "total_spent": round(total_spent, 2),
+        "avg_monthly_spent": round(avg_monthly_spent, 2),
         "remaining": round(remaining, 2),
-        "category_breakdown": breakdown
+        "months_detected": months_count,
+        "months": months,
+        "category_breakdown": avg_breakdown
     }
 
 
-# =====================================================
+# -----------------------------------------
 # Recommendation Agent
-# =====================================================
+# -----------------------------------------
 def generate_recommendations(analysis):
     budget = analysis["budget"]
     remaining = analysis["remaining"]
     breakdown = analysis["category_breakdown"]
 
-    avoid = []
-    okay = []
-    actions = []
+    avoid, okay, actions = [], [], []
 
     for category, amount in breakdown.items():
         limit = CATEGORY_LIMITS.get(category, 20)
         percent = (amount / budget) * 100
 
         if percent > limit:
-            avoid.append(
-                f"{category}: ₹{amount} ({percent:.1f}% > {limit}%)"
-            )
+            avoid.append(f"{category}: ₹{int(amount)} ({percent:.1f}% > {limit}%)")
             reduce_by = amount - (limit / 100) * budget
-            actions.append(
-                f"Reduce {category} spending by approx ₹{int(reduce_by)}"
-            )
+            actions.append(f"Reduce {category} by approx ₹{int(reduce_by)} per month")
         else:
-            okay.append(
-                f"{category}: ₹{amount} ({percent:.1f}%)"
-            )
+            okay.append(f"{category}: ₹{int(amount)} ({percent:.1f}%)")
 
     goal_text = (
-        f"Save ₹{remaining} this month"
+        f"Save ₹{int(remaining)} per month"
         if remaining > 0
-        else "Reduce discretionary spending to stay within budget"
+        else "Reduce discretionary expenses to stay within budget"
     )
 
     return {
@@ -139,34 +138,25 @@ def generate_recommendations(analysis):
     }
 
 
-# =====================================================
+# -----------------------------------------
 # Goal Planning Agent
-# =====================================================
+# -----------------------------------------
 def goal_planning_agent(analysis, goal_name, goal_amount):
-    remaining = analysis["remaining"]
-    breakdown = analysis["category_breakdown"]
-
-    months = GOALS.get(goal_name, {}).get("months", 6)
+    months = GOALS.get(goal_name, 6)
     monthly_required = goal_amount / months
+    remaining = analysis["remaining"]
 
     feasible = remaining >= monthly_required
     plan = []
 
     if feasible:
-        plan.append(
-            f"Save ₹{int(monthly_required)} per month to achieve this goal."
-        )
+        plan.append(f"Save ₹{int(monthly_required)} per month to reach this goal.")
     else:
         shortfall = monthly_required - remaining
-        plan.append(
-            f"You need ₹{int(shortfall)} more per month to reach this goal."
-        )
-
-        for category in ["Shopping", "Entertainment", "Travel"]:
-            if category in breakdown:
-                plan.append(
-                    f"Reduce {category} spending by ₹500–₹1000."
-                )
+        plan.append(f"Need ₹{int(shortfall)} more per month to reach this goal.")
+        for cat in ["Shopping", "Entertainment", "Travel"]:
+            if cat in analysis["category_breakdown"]:
+                plan.append(f"Reduce {cat} spending by ₹500–₹1000.")
 
     return {
         "goal": goal_name,
@@ -178,47 +168,34 @@ def goal_planning_agent(analysis, goal_name, goal_amount):
     }
 
 
-# =====================================================
-# Explanation Generator (AI or Rule-based)
-# =====================================================
+# -----------------------------------------
+# Explanation Generator
+# -----------------------------------------
 def generate_explanation(summary, goal_plan=None):
-    if USE_LLM and llm is not None:
-        prompt = f"""
-        Explain the following financial advice in simple language:
-
-        Overspending areas: {summary['avoid']}
-        Safe spending areas: {summary['okay']}
-        Goal: {summary['goal']}
-        Action steps: {summary['actions']}
-        Goal plan: {goal_plan}
-        """
+    if USE_LLM and llm:
         try:
-            return llm.invoke(prompt).content
+            return llm.invoke(
+                f"Explain this financial advice simply: {summary}, Goal: {goal_plan}"
+            ).content
         except Exception:
             pass
 
-    # Rule-based fallback
-    explanation = (
-        "Based on your expenses and budget, focus on reducing discretionary "
-        "spending, prioritizing essential categories, and consistently saving "
-        "towards your financial goals."
+    return (
+        "Based on your average monthly spending, reduce overspending categories, "
+        "prioritize essentials, and save consistently to achieve your financial goals."
     )
 
-    return explanation
 
-
-# =====================================================
-# MASTER AGENT FUNCTION
-# =====================================================
+# -----------------------------------------
+# MASTER FUNCTION
+# -----------------------------------------
 def finbot_advanced(df, budget, goal_name=None, goal_amount=None):
     analysis = analyze_budget(df, budget)
     summary = generate_recommendations(analysis)
 
     goal_plan = None
     if goal_name and goal_amount:
-        goal_plan = goal_planning_agent(
-            analysis, goal_name, goal_amount
-        )
+        goal_plan = goal_planning_agent(analysis, goal_name, goal_amount)
 
     explanation = generate_explanation(summary, goal_plan)
 
