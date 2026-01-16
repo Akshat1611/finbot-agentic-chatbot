@@ -46,11 +46,24 @@ goal_name = st.sidebar.selectbox(
 )
 
 goal_amount = None
+goal_months = None
+
 if goal_name != "None":
     goal_amount = st.sidebar.number_input(
         "Goal Amount (₹)",
         min_value=1000,
         step=1000
+    )
+
+    goal_months = st.sidebar.number_input(
+        "Target Duration (Months)",
+        min_value=1,
+        max_value=60,
+        value=6
+    )
+
+    st.sidebar.caption(
+        f"Saving ₹{int(goal_amount / goal_months)} per month"
     )
 
 # -------------------------------------------------
@@ -64,35 +77,27 @@ if uploaded_file and budget > 0:
         df=df,
         budget=budget,
         goal_name=None if goal_name == "None" else goal_name,
-        goal_amount=goal_amount
+        goal_amount=goal_amount,
+        goal_months=goal_months
     )
 
-    # -------------------------------------------------
-    # Month Detection Info
-    # -------------------------------------------------
     st.info(
         f"📅 Detected {analysis['months_detected']} month(s): "
-        f"{', '.join(analysis['months'])}. "
-        "Analysis is based on average monthly spending."
+        f"{', '.join(analysis['months'])}"
     )
 
-    # -------------------------------------------------
-    # Budget Summary
-    # -------------------------------------------------
     c1, c2, c3 = st.columns(3)
     c1.metric("Monthly Budget (₹)", analysis["budget"])
     c2.metric("Avg Monthly Spend (₹)", analysis["avg_monthly_spent"])
     c3.metric("Remaining (₹)", analysis["remaining"])
 
-    # =================================================
-    # 📊 VISUAL ANALYTICS (2 GRAPHS PER ROW)
-    # =================================================
+    # -------------------------------------------------
+    # Charts
+    # -------------------------------------------------
     st.subheader("📊 Spending Insights")
 
-    # ---------- ROW 1 (2 graphs) ----------
     col1, col2 = st.columns(2)
 
-    # 🥧 Pie Chart – Spending Distribution
     with col1:
         fig1, ax1 = plt.subplots(figsize=(4, 4))
         ax1.pie(
@@ -101,14 +106,10 @@ if uploaded_file and budget > 0:
             autopct="%1.0f%%",
             startangle=90
         )
-        ax1.set_title("Spending Distribution", fontsize=10)
         ax1.axis("equal")
         st.pyplot(fig1)
 
-    # 📉 Bar Chart – Actual vs Recommended
     with col2:
-        fig2, ax2 = plt.subplots(figsize=(4.5, 3))
-
         categories = list(analysis["category_breakdown"].keys())
         actual = list(analysis["category_breakdown"].values())
 
@@ -125,85 +126,40 @@ if uploaded_file and budget > 0:
         x = np.arange(len(categories))
         width = 0.35
 
+        fig2, ax2 = plt.subplots(figsize=(4.5, 3))
         ax2.bar(x - width/2, actual, width, label="Actual")
         ax2.bar(x + width/2, recommended, width, label="Recommended")
-
         ax2.set_xticks(x)
-        ax2.set_xticklabels(categories, rotation=30, ha="right", fontsize=8)
-        ax2.set_ylabel("Amount (₹)")
-        ax2.set_title("Actual vs Recommended", fontsize=10)
-        ax2.legend(fontsize=8)
-
+        ax2.set_xticklabels(categories, rotation=30, ha="right")
+        ax2.legend()
         st.pyplot(fig2)
 
-    # ---------- ROW 2 (1 centered graph) ----------
-    col_left, col_center, col_right = st.columns([1, 2, 1])
-
-    with col_center:
-        st.markdown("### 📈 Monthly Spending Trend")
-
-        monthly_spend = get_monthly_spending_trend(df)
-
-        fig3, ax3 = plt.subplots(figsize=(5, 3))
-        ax3.plot(
-            monthly_spend["Month"],
-            monthly_spend["Amount"],
-            marker="o"
-        )
-        ax3.set_xlabel("Month")
-        ax3.set_ylabel("Total Spend (₹)")
-        ax3.grid(True)
-
-        st.pyplot(fig3)
-
-    # =================================================
-    # RECOMMENDATIONS
-    # =================================================
-    st.subheader("❌ Where NOT to Spend")
-    if summary["avoid"]:
-        for item in summary["avoid"]:
-            st.error(item)
-    else:
-        st.success("No major overspending detected.")
-
-    st.subheader("✅ Safe Spending Areas")
-    for item in summary["okay"]:
-        st.success(item)
-
-    st.subheader("📋 Action Plan")
-    for act in summary["actions"]:
-        st.warning(act)
-
-    st.subheader("🎯 Monthly Saving Goal")
-    st.info(summary["goal"])
-
-    # =================================================
-    # GOAL MODE
-    # =================================================
+    # -------------------------------------------------
+    # Goal Mode
+    # -------------------------------------------------
     if goal_plan:
         st.subheader("🎯 Goal Planning")
 
         st.write(
-            f"**Goal:** {goal_plan['goal']}  \n"
-            f"**Target Amount:** ₹{goal_plan['target_amount']}  \n"
-            f"**Duration:** {goal_plan['duration_months']} months  \n"
-            f"**Monthly Required:** ₹{goal_plan['monthly_saving_required']}"
+            f"""
+            **Goal:** {goal_plan['goal']}  
+            **Target Amount:** ₹{goal_plan['target_amount']}  
+            **Duration:** {goal_plan['duration_months']} months  
+            **Required / Month:** ₹{goal_plan['monthly_saving_required']}
+            """
         )
 
         progress = max(analysis["remaining"], 0) / goal_plan["target_amount"]
         st.progress(min(progress, 1.0))
 
         if goal_plan["feasible"]:
-            st.success("✅ Goal is achievable with current spending.")
+            st.success("✅ Goal is achievable.")
         else:
-            st.error("⚠️ Goal requires spending adjustments.")
+            st.warning("⚠️ Increase duration or reduce expenses.")
 
         for step in goal_plan["plan"]:
             st.warning(step)
 
-    # =================================================
-    # EXPLANATION
-    # =================================================
     st.subheader("🧠 Explanation")
     st.write(explanation)
 
