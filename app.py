@@ -1,5 +1,6 @@
 import streamlit as st
 import matplotlib.pyplot as plt
+import numpy as np
 
 from finbot import (
     load_expense_data,
@@ -16,9 +17,9 @@ st.set_page_config(
 )
 
 st.title("💰 FinBot – Agentic Finance Assistant")
-st.write(
-    "Upload your expense data, enter a monthly budget, and receive "
-    "goal-based financial insights with visual analytics."
+st.caption(
+    "Agentic personal finance assistant with goal-based planning "
+    "and compact visual analytics."
 )
 
 # -------------------------------------------------
@@ -53,18 +54,22 @@ if goal_name != "None":
     )
 
 # -------------------------------------------------
-# Main App Logic
+# Main Logic
 # -------------------------------------------------
 if uploaded_file and budget > 0:
+
     df = load_expense_data(uploaded_file)
 
     analysis, summary, goal_plan, explanation = finbot_advanced(
-        df,
-        budget,
-        None if goal_name == "None" else goal_name,
-        goal_amount
+        df=df,
+        budget=budget,
+        goal_name=None if goal_name == "None" else goal_name,
+        goal_amount=goal_amount
     )
 
+    # -------------------------------------------------
+    # Month Detection Info
+    # -------------------------------------------------
     st.info(
         f"📅 Detected {analysis['months_detected']} month(s): "
         f"{', '.join(analysis['months'])}. "
@@ -79,68 +84,87 @@ if uploaded_file and budget > 0:
     c2.metric("Avg Monthly Spend (₹)", analysis["avg_monthly_spent"])
     c3.metric("Remaining (₹)", analysis["remaining"])
 
-    # -------------------------------------------------
-    # Pie Chart
-    # -------------------------------------------------
-    st.subheader("📊 Spending Distribution (Avg Monthly)")
+    # =================================================
+    # 📊 VISUAL ANALYTICS (2 GRAPHS PER ROW)
+    # =================================================
+    st.subheader("📊 Spending Insights")
 
-    fig1, ax1 = plt.subplots()
-    ax1.pie(
-        analysis["category_breakdown"].values(),
-        labels=analysis["category_breakdown"].keys(),
-        autopct="%1.1f%%",
-        startangle=90
-    )
-    ax1.axis("equal")
-    st.pyplot(fig1)
+    # ---------- ROW 1 (2 graphs) ----------
+    col1, col2 = st.columns(2)
 
-    # -------------------------------------------------
-    # Bar Chart
-    # -------------------------------------------------
-    st.subheader("📉 Spending vs Recommended Limits")
+    # 🥧 Pie Chart – Spending Distribution
+    with col1:
+        fig1, ax1 = plt.subplots(figsize=(4, 4))
+        ax1.pie(
+            analysis["category_breakdown"].values(),
+            labels=analysis["category_breakdown"].keys(),
+            autopct="%1.0f%%",
+            startangle=90
+        )
+        ax1.set_title("Spending Distribution", fontsize=10)
+        ax1.axis("equal")
+        st.pyplot(fig1)
 
-    LIMITS = {
-        "Food": 40, "Rent": 35, "Shopping": 15,
-        "Entertainment": 10, "Travel": 10, "Utilities": 10
-    }
+    # 📉 Bar Chart – Actual vs Recommended
+    with col2:
+        fig2, ax2 = plt.subplots(figsize=(4.5, 3))
 
-    cats, actual, limits = [], [], []
-    for cat, amt in analysis["category_breakdown"].items():
-        cats.append(cat)
-        actual.append(amt)
-        limits.append((LIMITS.get(cat, 20) / 100) * analysis["budget"])
+        categories = list(analysis["category_breakdown"].keys())
+        actual = list(analysis["category_breakdown"].values())
 
-    fig2, ax2 = plt.subplots()
-    ax2.bar(cats, actual, label="Actual")
-    ax2.bar(cats, limits, alpha=0.6, label="Recommended")
-    ax2.set_ylabel("Amount (₹)")
-    ax2.legend()
-    st.pyplot(fig2)
+        LIMITS = {
+            "Food": 40, "Rent": 35, "Shopping": 15,
+            "Entertainment": 10, "Travel": 10, "Utilities": 10
+        }
 
-    # -------------------------------------------------
-    # Month-wise Trend Graph
-    # -------------------------------------------------
-    st.subheader("📈 Month-wise Spending Trend")
+        recommended = [
+            (LIMITS.get(cat, 20) / 100) * analysis["budget"]
+            for cat in categories
+        ]
 
-    monthly_spend = get_monthly_spending_trend(df)
+        x = np.arange(len(categories))
+        width = 0.35
 
-    fig3, ax3 = plt.subplots()
-    ax3.plot(
-        monthly_spend["Month"],
-        monthly_spend["Amount"],
-        marker="o"
-    )
-    ax3.set_xlabel("Month")
-    ax3.set_ylabel("Total Spending (₹)")
-    ax3.grid(True)
-    st.pyplot(fig3)
+        ax2.bar(x - width/2, actual, width, label="Actual")
+        ax2.bar(x + width/2, recommended, width, label="Recommended")
 
-    # -------------------------------------------------
-    # Recommendations
-    # -------------------------------------------------
+        ax2.set_xticks(x)
+        ax2.set_xticklabels(categories, rotation=30, ha="right", fontsize=8)
+        ax2.set_ylabel("Amount (₹)")
+        ax2.set_title("Actual vs Recommended", fontsize=10)
+        ax2.legend(fontsize=8)
+
+        st.pyplot(fig2)
+
+    # ---------- ROW 2 (1 centered graph) ----------
+    col_left, col_center, col_right = st.columns([1, 2, 1])
+
+    with col_center:
+        st.markdown("### 📈 Monthly Spending Trend")
+
+        monthly_spend = get_monthly_spending_trend(df)
+
+        fig3, ax3 = plt.subplots(figsize=(5, 3))
+        ax3.plot(
+            monthly_spend["Month"],
+            monthly_spend["Amount"],
+            marker="o"
+        )
+        ax3.set_xlabel("Month")
+        ax3.set_ylabel("Total Spend (₹)")
+        ax3.grid(True)
+
+        st.pyplot(fig3)
+
+    # =================================================
+    # RECOMMENDATIONS
+    # =================================================
     st.subheader("❌ Where NOT to Spend")
-    for item in summary["avoid"]:
-        st.error(item)
+    if summary["avoid"]:
+        for item in summary["avoid"]:
+            st.error(item)
+    else:
+        st.success("No major overspending detected.")
 
     st.subheader("✅ Safe Spending Areas")
     for item in summary["okay"]:
@@ -153,15 +177,15 @@ if uploaded_file and budget > 0:
     st.subheader("🎯 Monthly Saving Goal")
     st.info(summary["goal"])
 
-    # -------------------------------------------------
-    # Goal Mode
-    # -------------------------------------------------
+    # =================================================
+    # GOAL MODE
+    # =================================================
     if goal_plan:
         st.subheader("🎯 Goal Planning")
 
         st.write(
             f"**Goal:** {goal_plan['goal']}  \n"
-            f"**Target:** ₹{goal_plan['target_amount']}  \n"
+            f"**Target Amount:** ₹{goal_plan['target_amount']}  \n"
             f"**Duration:** {goal_plan['duration_months']} months  \n"
             f"**Monthly Required:** ₹{goal_plan['monthly_saving_required']}"
         )
@@ -177,9 +201,9 @@ if uploaded_file and budget > 0:
         for step in goal_plan["plan"]:
             st.warning(step)
 
-    # -------------------------------------------------
-    # Explanation
-    # -------------------------------------------------
+    # =================================================
+    # EXPLANATION
+    # =================================================
     st.subheader("🧠 Explanation")
     st.write(explanation)
 
@@ -188,4 +212,3 @@ if uploaded_file and budget > 0:
 
 else:
     st.info("👈 Upload an expense file and enter a budget to begin.")
-
