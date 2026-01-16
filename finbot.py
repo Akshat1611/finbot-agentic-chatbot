@@ -13,7 +13,6 @@ try:
 except Exception:
     USE_LLM = False
 
-
 # -------------------------------------------------
 # Configuration
 # -------------------------------------------------
@@ -26,16 +25,8 @@ CATEGORY_LIMITS = {
     "Utilities": 10
 }
 
-GOALS = {
-    "Emergency Fund": 6,
-    "Travel": 6,
-    "Gadget": 4,
-    "Investment": 12
-}
-
-
 # -------------------------------------------------
-# Load Expense Data (Indian + Month Name Support)
+# Load Expense Data
 # -------------------------------------------------
 def load_expense_data(file):
     if file.name.endswith(".csv"):
@@ -46,23 +37,15 @@ def load_expense_data(file):
         raise ValueError("Only CSV and Excel files are supported")
 
     df["Amount"] = pd.to_numeric(df["Amount"], errors="coerce")
-
-    df["Date"] = pd.to_datetime(
-        df["Date"],
-        dayfirst=True,
-        errors="coerce"
-    )
+    df["Date"] = pd.to_datetime(df["Date"], dayfirst=True, errors="coerce")
 
     df.dropna(subset=["Date", "Category", "Amount"], inplace=True)
-
-    # Month label like "Jan 2026"
     df["Month"] = df["Date"].dt.strftime("%b %Y")
 
     return df
 
-
 # -------------------------------------------------
-# Monthly Summary (Multi-month Logic)
+# Monthly Summary
 # -------------------------------------------------
 def get_monthly_summary(df):
     monthly = (
@@ -77,11 +60,7 @@ def get_monthly_summary(df):
         .to_dict()
     )
 
-    months_detected = df["Month"].nunique()
-    months = sorted(df["Month"].unique())
-
-    return avg_monthly, months_detected, months
-
+    return avg_monthly, df["Month"].nunique(), sorted(df["Month"].unique())
 
 def get_monthly_spending_trend(df):
     return (
@@ -89,7 +68,6 @@ def get_monthly_spending_trend(df):
         .sum()
         .reset_index()
     )
-
 
 # -------------------------------------------------
 # Budget Analysis
@@ -108,7 +86,6 @@ def analyze_budget(df, budget):
         "months": months,
         "category_breakdown": avg_breakdown
     }
-
 
 # -------------------------------------------------
 # Recommendation Agent
@@ -150,13 +127,11 @@ def generate_recommendations(analysis):
         "goal": goal_text
     }
 
-
 # -------------------------------------------------
-# Goal Planning Agent
+# Goal Planning Agent (USER DEFINED MONTHS)
 # -------------------------------------------------
-def goal_planning_agent(analysis, goal_name, goal_amount):
-    months = GOALS.get(goal_name, 6)
-    monthly_required = goal_amount / months
+def goal_planning_agent(analysis, goal_name, goal_amount, goal_months):
+    monthly_required = goal_amount / goal_months
     remaining = analysis["remaining"]
 
     feasible = remaining >= monthly_required
@@ -164,12 +139,12 @@ def goal_planning_agent(analysis, goal_name, goal_amount):
 
     if feasible:
         plan.append(
-            f"Save ₹{int(monthly_required)} per month to reach this goal."
+            f"Save ₹{int(monthly_required)} per month for {goal_months} months."
         )
     else:
         shortfall = monthly_required - remaining
         plan.append(
-            f"You need ₹{int(shortfall)} more per month."
+            f"You need ₹{int(shortfall)} more per month to meet this goal."
         )
         for cat in ["Shopping", "Entertainment", "Travel"]:
             if cat in analysis["category_breakdown"]:
@@ -180,12 +155,11 @@ def goal_planning_agent(analysis, goal_name, goal_amount):
     return {
         "goal": goal_name,
         "target_amount": goal_amount,
-        "duration_months": months,
+        "duration_months": goal_months,
         "monthly_saving_required": int(monthly_required),
         "feasible": feasible,
         "plan": plan
     }
-
 
 # -------------------------------------------------
 # Explanation Generator
@@ -205,18 +179,23 @@ def generate_explanation(summary, goal_plan=None):
         "saving consistently to achieve your financial goals."
     )
 
-
 # -------------------------------------------------
 # MASTER FUNCTION
 # -------------------------------------------------
-def finbot_advanced(df, budget, goal_name=None, goal_amount=None):
+def finbot_advanced(
+    df,
+    budget,
+    goal_name=None,
+    goal_amount=None,
+    goal_months=None
+):
     analysis = analyze_budget(df, budget)
     summary = generate_recommendations(analysis)
 
     goal_plan = None
-    if goal_name and goal_amount:
+    if goal_name and goal_amount and goal_months:
         goal_plan = goal_planning_agent(
-            analysis, goal_name, goal_amount
+            analysis, goal_name, goal_amount, goal_months
         )
 
     explanation = generate_explanation(summary, goal_plan)
