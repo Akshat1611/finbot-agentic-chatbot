@@ -10,27 +10,9 @@ try:
     from langchain_ollama import ChatOllama
     llm = ChatOllama(model="llama3", temperature=0.3)
     USE_LLM = True
-except Exception:
+except Exception as e:
+    print("LLM INIT ERROR:", e)
     USE_LLM = False
-
-# -------------------------------------------------
-# Configuration
-# -------------------------------------------------
-CATEGORY_LIMITS = {
-    "Food": 40,
-    "Rent": 35,
-    "Shopping": 15,
-    "Entertainment": 10,
-    "Travel": 10,
-    "Utilities": 10
-}
-
-GOALS = {
-    "Emergency Fund": 6,
-    "Travel": 6,
-    "Gadget": 4,
-    "Investment": 12
-}
 
 # -------------------------------------------------
 # Load Expense Data
@@ -83,6 +65,15 @@ def analyze_budget(df, budget):
 # Recommendation Agent
 # -------------------------------------------------
 def generate_recommendations(analysis):
+    CATEGORY_LIMITS = {
+        "Food": 40,
+        "Rent": 35,
+        "Shopping": 15,
+        "Entertainment": 10,
+        "Travel": 10,
+        "Utilities": 10
+    }
+
     avoid, okay, actions = [], [], []
 
     for cat, amt in analysis["category_breakdown"].items():
@@ -109,11 +100,10 @@ def generate_recommendations(analysis):
     }
 
 # -------------------------------------------------
-# Goal Planning Agent
+# Goal Planning Agent (USER-DEFINED MONTHS)
 # -------------------------------------------------
-def goal_planning_agent(analysis, goal_name, goal_amount):
-    months = GOALS.get(goal_name, 6)
-    monthly_required = goal_amount / months
+def goal_planning_agent(analysis, goal_name, goal_amount, goal_months):
+    monthly_required = goal_amount / goal_months
     current_saving = max(analysis["remaining"], 0)
 
     feasible = current_saving >= monthly_required
@@ -121,7 +111,7 @@ def goal_planning_agent(analysis, goal_name, goal_amount):
     return {
         "goal": goal_name,
         "target_amount": goal_amount,
-        "duration_months": months,
+        "duration_months": goal_months,
         "monthly_saving_required": int(monthly_required),
         "current_saving": int(current_saving),
         "feasible": feasible
@@ -140,7 +130,6 @@ def ai_explain_finances(analysis, summary, goal_plan):
     Budget: ₹{analysis['budget']}
     Average Monthly Spend: ₹{analysis['avg_monthly_spent']}
     Remaining: ₹{analysis['remaining']}
-
     Overspending: {summary['avoid']}
     Actions: {summary['actions']}
     Goal: {goal_plan}
@@ -158,33 +147,38 @@ def ai_explain_finances(analysis, summary, goal_plan):
 # -------------------------------------------------
 def ai_chat_response(user_input, analysis):
     if not USE_LLM:
-        return "AI model is not active. Please start Ollama."
-
-    prompt = f"""
-    User financial context:
-    {analysis}
-
-    User question:
-    {user_input}
-
-    Answer clearly and concisely like a helpful finance chatbot.
-    """
+        return (
+            "AI model is not active. "
+            f"You spend ₹{int(analysis['avg_monthly_spent'])} "
+            f"out of ₹{analysis['budget']} monthly."
+        )
 
     try:
-        return llm.invoke(prompt).content
+        return llm.invoke(user_input).content
     except Exception:
         return "Sorry, I couldn't respond right now."
 
 # -------------------------------------------------
-# MASTER FUNCTION (RETURNS 5 VALUES)
+# MASTER FUNCTION
 # -------------------------------------------------
-def finbot_advanced(df, budget, goal_name=None, goal_amount=None):
+def finbot_advanced(
+    df,
+    budget,
+    goal_name=None,
+    goal_amount=None,
+    goal_months=None
+):
     analysis = analyze_budget(df, budget)
     summary = generate_recommendations(analysis)
 
     goal_plan = None
-    if goal_name and goal_amount:
-        goal_plan = goal_planning_agent(analysis, goal_name, goal_amount)
+    if goal_name and goal_amount and goal_months:
+        goal_plan = goal_planning_agent(
+            analysis,
+            goal_name,
+            goal_amount,
+            goal_months
+        )
 
     explanation = (
         "Insights are generated using agent-based financial analysis."
@@ -193,4 +187,3 @@ def finbot_advanced(df, budget, goal_name=None, goal_amount=None):
     ai_response = ai_explain_finances(analysis, summary, goal_plan)
 
     return analysis, summary, goal_plan, explanation, ai_response
-
