@@ -1,39 +1,44 @@
-# 💰 FinBot – Agentic Finance Chatbot
+# 💰 FinBot – Agentic Finance Assistant
 
-FinBot is an **agentic AI-based personal finance assistant** that analyzes user expenses against a given budget and provides **actionable financial insights, spending recommendations, and savings goals**.
+FinBot is an **agentic AI-powered personal finance assistant** that helps users analyze their expenses against a given budget, identify overspending areas, track financial goals, and receive actionable recommendations — all through an interactive **Streamlit web application**.
 
-The chatbot demonstrates **agentic behavior** by:
-- Making decisions based on user input
-- Using tools for data analysis
-- Recommending next actions
-- Generating explainable financial advice
+The project demonstrates **agentic AI behavior**, where the system does more than just respond: it **analyzes data, makes decisions, plans actions, and recommends next steps**.
 
 ---
 
-## 🚀 Features
+## 🚀 Key Features
 
-- 📂 Upload expense data (CSV / Excel)
-- 💸 Accepts user-defined monthly budget
-- 📊 Category-wise expense analysis
-- ❌ Identifies overspending areas
-- ✅ Highlights safe spending categories
-- 🎯 Suggests savings goals
-- 📋 Generates step-by-step action plans
-- 🧠 Explainable AI-based financial advice
-- 🌐 Deployed as an interactive Streamlit web app
+- 📂 Upload expense data (CSV or Excel)
+- 💸 Enter monthly budget
+- 📊 Visual analytics:
+  - Spending distribution (Pie chart)
+  - Actual vs recommended spending (Bar chart)
+- ❌ Identifies overspending categories
+- ✅ Highlights safe spending areas
+- 📋 Generates actionable reduction plans
+- 🎯 Goal Mode:
+  - Emergency fund, Travel, Gadget, Investment
+  - Monthly savings calculation
+  - Goal feasibility check
+  - Progress tracking with progress bar
+- 🧠 Explainable recommendations (AI-based locally, rule-based on cloud)
+- 🌐 Deployed as a Streamlit web app
 
 ---
 
-## 🧠 Agentic Capabilities Implemented
+## 🧠 Agentic AI Capabilities
+
+This project implements multiple **agentic behaviors**:
 
 | Agent Type | Description |
-|----------|-------------|
-| Decision Agent | Decides whether to analyze, recommend, or explain |
-| Tool-Using Agent | Uses data analysis tools (pandas) |
+|-----------|-------------|
+| Decision Agent | Chooses analysis and recommendation paths based on user input |
+| Tool-Using Agent | Uses data analysis tools (pandas) for expense computation |
 | Recommendation Agent | Suggests spending cuts, reallocations, and goals |
-| Multi-Step Agent | Breaks advice into actionable steps |
+| Multi-Step Agent | Breaks financial advice into actionable steps |
+| Goal Planning Agent | Aligns spending decisions with user-defined goals |
 
 ---
 
-## 🏗️ Project Architecture
+## 🏗️ System Architecture
 
