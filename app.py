@@ -1,189 +1,171 @@
-import pandas as pd
+import streamlit as st
+import matplotlib.pyplot as plt
+import numpy as np
+
+from finbot import (
+    load_expense_data,
+    finbot_advanced,
+    get_monthly_spending_trend,
+    ai_chat_response
+)
 
 # -------------------------------------------------
-# AI SETUP (LLaMA 3 via Ollama)
+# Page Config
 # -------------------------------------------------
-USE_LLM = False
-llm = None
+st.set_page_config(
+    page_title="FinBot – AI Finance Chatbot",
+    layout="wide"
+)
 
-try:
-    from langchain_ollama import ChatOllama
-    llm = ChatOllama(model="llama3", temperature=0.3)
-    USE_LLM = True
-except Exception as e:
-    print("LLM INIT ERROR:", e)
-    USE_LLM = False
+st.title("💰 FinBot – AI Finance Chatbot")
+st.caption("Agentic finance assistant with AI-powered conversation")
 
 # -------------------------------------------------
-# Load Expense Data
+# Sidebar Inputs
 # -------------------------------------------------
-def load_expense_data(file):
-    if file.name.endswith(".csv"):
-        df = pd.read_csv(file)
-    elif file.name.endswith(".xlsx"):
-        df = pd.read_excel(file)
-    else:
-        raise ValueError("Only CSV and Excel supported")
+uploaded_file = st.sidebar.file_uploader(
+    "Upload Expense File", type=["csv", "xlsx"]
+)
 
-    df["Amount"] = pd.to_numeric(df["Amount"], errors="coerce")
-    df["Date"] = pd.to_datetime(df["Date"], dayfirst=True, errors="coerce")
+budget = st.sidebar.number_input(
+    "Monthly Budget (₹)", min_value=0, step=500
+)
 
-    df.dropna(subset=["Date", "Category", "Amount"], inplace=True)
-    df["Month"] = df["Date"].dt.strftime("%b %Y")
+goal_name = st.sidebar.selectbox(
+    "Financial Goal",
+    ["None", "Emergency Fund", "Travel", "Gadget", "Investment"]
+)
 
-    return df
+goal_amount = None
+goal_months = None
 
-# -------------------------------------------------
-# Helpers
-# -------------------------------------------------
-def get_monthly_summary(df):
-    monthly = df.groupby(["Month", "Category"])["Amount"].sum().reset_index()
-    avg_monthly = monthly.groupby("Category")["Amount"].mean().to_dict()
-    return avg_monthly, df["Month"].nunique(), sorted(df["Month"].unique())
+if goal_name != "None":
+    goal_amount = st.sidebar.number_input(
+        "Goal Amount (₹)", min_value=1000, step=1000
+    )
 
-def get_monthly_spending_trend(df):
-    return df.groupby("Month")["Amount"].sum().reset_index()
-
-# -------------------------------------------------
-# Budget Analysis
-# -------------------------------------------------
-def analyze_budget(df, budget):
-    avg_breakdown, months_count, months = get_monthly_summary(df)
-    avg_spent = sum(avg_breakdown.values())
-    remaining = budget - avg_spent
-
-    return {
-        "budget": budget,
-        "avg_monthly_spent": avg_spent,
-        "remaining": remaining,
-        "months_detected": months_count,
-        "months": months,
-        "category_breakdown": avg_breakdown
-    }
+    goal_months = st.sidebar.number_input(
+        "Target Duration (Months)",
+        min_value=1,
+        max_value=60,
+        value=6
+    )
 
 # -------------------------------------------------
-# Recommendation Agent
+# Main Logic
 # -------------------------------------------------
-def generate_recommendations(analysis):
-    CATEGORY_LIMITS = {
-        "Food": 40,
-        "Rent": 35,
-        "Shopping": 15,
-        "Entertainment": 10,
-        "Travel": 10,
-        "Utilities": 10
-    }
+if uploaded_file and budget > 0:
+    df = load_expense_data(uploaded_file)
 
-    avoid, okay, actions = [], [], []
+    analysis, summary, goal_plan, explanation, ai_response = finbot_advanced(
+        df,
+        budget,
+        None if goal_name == "None" else goal_name,
+        goal_amount,
+        goal_months
+    )
 
-    for cat, amt in analysis["category_breakdown"].items():
-        limit = CATEGORY_LIMITS.get(cat, 20)
-        percent = (amt / analysis["budget"]) * 100
+    st.info(
+        f"📅 Months detected: {analysis['months_detected']} "
+        f"({', '.join(analysis['months'])})"
+    )
 
-        if percent > limit:
-            avoid.append(f"{cat}: ₹{int(amt)} ({percent:.1f}% > {limit}%)")
-            actions.append(f"Reduce {cat} spending")
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Budget", int(analysis["budget"]))
+    c2.metric("Avg Spend", int(analysis["avg_monthly_spent"]))
+    c3.metric("Remaining", int(analysis["remaining"]))
+
+    # -------------------------------------------------
+    # Charts
+    # -------------------------------------------------
+    col1, col2 = st.columns(2)
+
+    with col1:
+        fig1, ax1 = plt.subplots(figsize=(4, 4))
+        ax1.pie(
+            analysis["category_breakdown"].values(),
+            labels=analysis["category_breakdown"].keys(),
+            autopct="%1.0f%%"
+        )
+        ax1.set_title("Spending Distribution")
+        st.pyplot(fig1)
+
+    with col2:
+        cats = list(analysis["category_breakdown"].keys())
+        vals = list(analysis["category_breakdown"].values())
+        x = np.arange(len(cats))
+
+        fig2, ax2 = plt.subplots(figsize=(4.5, 3))
+        ax2.bar(x, vals)
+        ax2.set_xticks(x)
+        ax2.set_xticklabels(cats, rotation=30)
+        ax2.set_title("Avg Monthly Spend")
+        st.pyplot(fig2)
+
+    trend = get_monthly_spending_trend(df)
+    fig3, ax3 = plt.subplots(figsize=(5, 3))
+    ax3.plot(trend["Month"], trend["Amount"], marker="o")
+    ax3.set_title("Monthly Spending Trend")
+    st.pyplot(fig3)
+
+    # -------------------------------------------------
+    # Goal Progress
+    # -------------------------------------------------
+    if goal_plan:
+        st.subheader("🎯 Goal Progress")
+
+        progress = min(
+            goal_plan["current_saving"] / goal_plan["target_amount"], 1.0
+        )
+
+        st.progress(progress)
+        st.write(
+            f"Saving ₹{goal_plan['current_saving']} / "
+            f"₹{goal_plan['target_amount']} "
+            f"({int(progress*100)}%)"
+        )
+
+        if goal_plan["feasible"]:
+            st.success("✅ Goal is achievable.")
         else:
-            okay.append(f"{cat}: ₹{int(amt)} ({percent:.1f}%)")
+            st.warning("⚠️ Increase savings or reduce expenses.")
 
-    goal_text = (
-        f"Save ₹{int(max(analysis['remaining'], 0))} per month"
-        if analysis["remaining"] > 0
-        else "Reduce expenses to start saving"
-    )
+    # -------------------------------------------------
+    # AI Explanation
+    # -------------------------------------------------
+    st.subheader("🤖 FinBot AI Insight")
+    if ai_response:
+        st.write(ai_response)
+    else:
+        st.caption("AI model not active. Showing rule-based insights.")
 
-    return {
-        "avoid": avoid,
-        "okay": okay,
-        "actions": actions,
-        "goal": goal_text
-    }
+    # -------------------------------------------------
+    # AI Chat
+    # -------------------------------------------------
+    st.subheader("💬 Chat with FinBot")
 
-# -------------------------------------------------
-# Goal Planning Agent (USER-DEFINED MONTHS)
-# -------------------------------------------------
-def goal_planning_agent(analysis, goal_name, goal_amount, goal_months):
-    monthly_required = goal_amount / goal_months
-    current_saving = max(analysis["remaining"], 0)
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history = []
 
-    feasible = current_saving >= monthly_required
+    for msg in st.session_state.chat_history:
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
 
-    return {
-        "goal": goal_name,
-        "target_amount": goal_amount,
-        "duration_months": goal_months,
-        "monthly_saving_required": int(monthly_required),
-        "current_saving": int(current_saving),
-        "feasible": feasible
-    }
+    user_input = st.chat_input("Ask FinBot about your finances...")
 
-# -------------------------------------------------
-# AI Explanation
-# -------------------------------------------------
-def ai_explain_finances(analysis, summary, goal_plan):
-    if not USE_LLM:
-        return None
-
-    prompt = f"""
-    You are a friendly AI personal finance assistant.
-
-    Budget: ₹{analysis['budget']}
-    Average Monthly Spend: ₹{analysis['avg_monthly_spent']}
-    Remaining: ₹{analysis['remaining']}
-    Overspending: {summary['avoid']}
-    Actions: {summary['actions']}
-    Goal: {goal_plan}
-
-    Explain the financial situation clearly and motivatingly.
-    """
-
-    try:
-        return llm.invoke(prompt).content
-    except Exception:
-        return None
-
-# -------------------------------------------------
-# AI Chat Response
-# -------------------------------------------------
-def ai_chat_response(user_input, analysis):
-    if not USE_LLM:
-        return (
-            "AI model is not active. "
-            f"You spend ₹{int(analysis['avg_monthly_spent'])} "
-            f"out of ₹{analysis['budget']} monthly."
+    if user_input:
+        st.session_state.chat_history.append(
+            {"role": "user", "content": user_input}
         )
 
-    try:
-        return llm.invoke(user_input).content
-    except Exception:
-        return "Sorry, I couldn't respond right now."
+        reply = ai_chat_response(user_input, analysis)
 
-# -------------------------------------------------
-# MASTER FUNCTION
-# -------------------------------------------------
-def finbot_advanced(
-    df,
-    budget,
-    goal_name=None,
-    goal_amount=None,
-    goal_months=None
-):
-    analysis = analyze_budget(df, budget)
-    summary = generate_recommendations(analysis)
-
-    goal_plan = None
-    if goal_name and goal_amount and goal_months:
-        goal_plan = goal_planning_agent(
-            analysis,
-            goal_name,
-            goal_amount,
-            goal_months
+        st.session_state.chat_history.append(
+            {"role": "assistant", "content": reply}
         )
 
-    explanation = (
-        "Insights are generated using agent-based financial analysis."
-    )
+        with st.chat_message("assistant"):
+            st.markdown(reply)
 
-    ai_response = ai_explain_finances(analysis, summary, goal_plan)
-
-    return analysis, summary, goal_plan, explanation, ai_response
+else:
+    st.info("👈 Upload a file and enter budget to begin.")
