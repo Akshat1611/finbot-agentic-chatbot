@@ -5,47 +5,45 @@ import numpy as np
 from finbot import (
     load_expense_data,
     finbot_advanced,
-    get_monthly_spending_trend,
-    ai_chat_response
+    get_monthly_spending_trend
 )
 
 # -------------------------------------------------
 # Page Config
 # -------------------------------------------------
 st.set_page_config(
-    page_title="FinBot – AI Finance Chatbot",
+    page_title="FinBot – Agentic Finance Assistant",
     layout="wide"
 )
 
-st.title("💰 FinBot – AI Finance Chatbot")
-st.caption("Agentic finance assistant with AI-powered conversation")
+st.title("💰 FinBot – Agentic Finance Assistant")
+st.caption("Agentic personal finance assistant with goal-based planning")
 
 # -------------------------------------------------
 # Sidebar Inputs
 # -------------------------------------------------
 uploaded_file = st.sidebar.file_uploader(
-    "Upload Expense File", type=["csv", "xlsx"]
+    "Upload Expense File (CSV / Excel)",
+    type=["csv", "xlsx"]
 )
 
 budget = st.sidebar.number_input(
-    "Monthly Budget (₹)", min_value=0, step=500
+    "Monthly Budget (₹)",
+    min_value=0,
+    step=500
 )
 
 goal_name = st.sidebar.selectbox(
-    "Financial Goal",
+    "Select Financial Goal",
     ["None", "Emergency Fund", "Travel", "Gadget", "Investment"]
 )
 
 goal_amount = None
-goal_months = None
-
 if goal_name != "None":
     goal_amount = st.sidebar.number_input(
-        "Goal Amount (₹)", min_value=1000, step=1000
-    )
-
-    goal_months = st.sidebar.number_input(
-        "Target Duration (Months)", min_value=1, max_value=60, value=6
+        "Goal Amount (₹)",
+        min_value=1000,
+        step=1000
     )
 
 # -------------------------------------------------
@@ -58,22 +56,21 @@ if uploaded_file and budget > 0:
         df,
         budget,
         None if goal_name == "None" else goal_name,
-        goal_amount,
-        goal_months
+        goal_amount
     )
 
     st.info(
-        f"📅 Months detected: {analysis['months_detected']} "
-        f"({', '.join(analysis['months'])})"
+        f"📅 Detected {analysis['months_detected']} month(s): "
+        f"{', '.join(analysis['months'])}"
     )
 
     c1, c2, c3 = st.columns(3)
-    c1.metric("Budget", int(analysis["budget"]))
-    c2.metric("Avg Spend", int(analysis["avg_monthly_spent"]))
-    c3.metric("Remaining", int(analysis["remaining"]))
+    c1.metric("Budget (₹)", int(analysis["budget"]))
+    c2.metric("Avg Spend (₹)", int(analysis["avg_monthly_spent"]))
+    c3.metric("Remaining (₹)", int(analysis["remaining"]))
 
     # -------------------------------------------------
-    # Charts
+    # Charts (2 + 1 layout)
     # -------------------------------------------------
     col1, col2 = st.columns(2)
 
@@ -106,64 +103,42 @@ if uploaded_file and budget > 0:
     st.pyplot(fig3)
 
     # -------------------------------------------------
-    # Goal Planning
+    # Goal Progress (FIXED & ALWAYS VISIBLE)
     # -------------------------------------------------
     if goal_plan:
-        st.subheader("🎯 Goal Planning Summary")
-
-        st.write(
-            f"""
-            **Goal:** {goal_plan['goal']}  
-            **Target Amount:** ₹{goal_plan['target_amount']}  
-            **Duration:** {goal_plan['duration_months']} months  
-            **Required / Month:** ₹{goal_plan['monthly_saving_required']}  
-            **Current Saving Capacity:** ₹{goal_plan['current_saving']}
-            """
-        )
+        st.subheader("🎯 Goal Progress")
 
         progress = min(
-            goal_plan["current_saving"] / goal_plan["target_amount"], 1.0
+            goal_plan["current_saving"] / goal_plan["target_amount"],
+            1.0
         )
 
         st.progress(progress)
 
+        st.write(
+            f"Current monthly saving: ₹{goal_plan['current_saving']} / "
+            f"₹{goal_plan['target_amount']} "
+            f"({int(progress * 100)}%)"
+        )
+
         if goal_plan["feasible"]:
-            st.success("✅ Goal is achievable.")
+            st.success("✅ You are on track to achieve this goal.")
         else:
-            st.warning("⚠️ Increase duration or reduce expenses.")
+            st.warning("⚠️ Reduce expenses to improve goal progress.")
 
     # -------------------------------------------------
-    # Chatbot
+    # Recommendations
     # -------------------------------------------------
-    st.subheader("💬 Chat with FinBot")
+    st.subheader("❌ Where NOT to Spend")
+    for item in summary["avoid"]:
+        st.error(item)
 
-    if "chat_history" not in st.session_state:
-        st.session_state.chat_history = []
+    st.subheader("📋 Action Plan")
+    for act in summary["actions"]:
+        st.warning(act)
 
-    for msg in st.session_state.chat_history:
-        with st.chat_message(msg["role"]):
-            st.markdown(msg["content"])
-
-    user_input = st.chat_input("Ask FinBot about your finances...")
-
-    if user_input:
-        st.session_state.chat_history.append(
-            {"role": "user", "content": user_input}
-        )
-
-        reply = ai_chat_response(
-            user_input,
-            analysis,
-            summary,
-            goal_plan
-        )
-
-        st.session_state.chat_history.append(
-            {"role": "assistant", "content": reply}
-        )
-
-        with st.chat_message("assistant"):
-            st.markdown(reply)
+    st.subheader("🧠 Explanation")
+    st.write(explanation)
 
 else:
-    st.info("👈 Upload a file and enter budget to begin.")
+    st.info("👈 Upload an expense file and enter a budget to begin.")
