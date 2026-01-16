@@ -28,7 +28,7 @@ def load_expense_data(file):
     elif file.name.endswith(".xlsx"):
         df = pd.read_excel(file)
     else:
-        raise ValueError("Only CSV and Excel supported")
+        raise ValueError("Only CSV and Excel files are supported")
 
     df["Amount"] = pd.to_numeric(df["Amount"], errors="coerce")
     df["Date"] = pd.to_datetime(df["Date"], dayfirst=True, errors="coerce")
@@ -118,7 +118,7 @@ def goal_planning_agent(analysis, goal_name, goal_amount):
     }
 
 # -------------------------------------------------
-# MASTER FUNCTION (RETURNS 4 VALUES – MATCHES app.py)
+# MASTER FUNCTION (RETURNS 4 VALUES)
 # -------------------------------------------------
 def finbot_advanced(df, budget, goal_name=None, goal_amount=None):
     analysis = analyze_budget(df, budget)
