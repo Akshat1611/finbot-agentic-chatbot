@@ -1,7 +1,7 @@
 import pandas as pd
 
 # -------------------------------------------------
-# Optional LLM (Cloud-safe fallback)
+# Optional LLM (Cloud-safe)
 # -------------------------------------------------
 USE_LLM = False
 llm = None
@@ -35,7 +35,7 @@ GOALS = {
 
 
 # -------------------------------------------------
-# Load Expense Data (Indian + Month Name Support)
+# Load Expense Data (Indian + Month Names)
 # -------------------------------------------------
 def load_expense_data(file):
     if file.name.endswith(".csv"):
@@ -43,7 +43,7 @@ def load_expense_data(file):
     elif file.name.endswith(".xlsx"):
         df = pd.read_excel(file)
     else:
-        raise ValueError("Only CSV and Excel files are supported")
+        raise ValueError("Only CSV and Excel supported")
 
     df["Amount"] = pd.to_numeric(df["Amount"], errors="coerce")
 
@@ -55,14 +55,13 @@ def load_expense_data(file):
 
     df.dropna(subset=["Date", "Category", "Amount"], inplace=True)
 
-    # Month label like "Jan 2026"
     df["Month"] = df["Date"].dt.strftime("%b %Y")
 
     return df
 
 
 # -------------------------------------------------
-# Monthly Summary (Multi-month Logic)
+# Monthly Helpers
 # -------------------------------------------------
 def get_monthly_summary(df):
     monthly = (
@@ -188,21 +187,51 @@ def goal_planning_agent(analysis, goal_name, goal_amount):
 
 
 # -------------------------------------------------
+# Multi-Step Planner Agent (NEW)
+# -------------------------------------------------
+def multi_step_planner(analysis, summary, goal_plan=None):
+    steps = []
+    step_no = 1
+
+    for action in summary["actions"]:
+        steps.append(f"Step {step_no}: {action}")
+        step_no += 1
+
+    if analysis["remaining"] > 0:
+        steps.append(
+            f"Step {step_no}: Allocate ₹{int(analysis['remaining'])} to savings"
+        )
+        step_no += 1
+
+    if goal_plan:
+        steps.append(
+            f"Step {step_no}: Redirect savings towards '{goal_plan['goal']}'"
+        )
+        step_no += 1
+
+    steps.append(
+        f"Step {step_no}: Review expenses and progress next month"
+    )
+
+    return steps
+
+
+# -------------------------------------------------
 # Explanation Generator
 # -------------------------------------------------
 def generate_explanation(summary, goal_plan=None):
     if USE_LLM and llm:
         try:
             return llm.invoke(
-                f"Explain this finance advice simply: {summary}, Goal: {goal_plan}"
+                f"Explain this financial advice simply: {summary}, Goal: {goal_plan}"
             ).content
         except Exception:
             pass
 
     return (
-        "Based on your average monthly spending, focus on reducing "
-        "overspending categories, prioritizing essentials, and "
-        "saving consistently to achieve your financial goals."
+        "Based on your average monthly spending, reduce overspending, "
+        "prioritize essentials, and follow the step-by-step plan to "
+        "achieve your financial goals."
     )
 
 
@@ -215,10 +244,9 @@ def finbot_advanced(df, budget, goal_name=None, goal_amount=None):
 
     goal_plan = None
     if goal_name and goal_amount:
-        goal_plan = goal_planning_agent(
-            analysis, goal_name, goal_amount
-        )
+        goal_plan = goal_planning_agent(analysis, goal_name, goal_amount)
 
+    steps = multi_step_planner(analysis, summary, goal_plan)
     explanation = generate_explanation(summary, goal_plan)
 
-    return analysis, summary, goal_plan, explanation
+    return analysis, summary, goal_plan, steps, explanation
